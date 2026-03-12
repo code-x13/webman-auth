@@ -473,14 +473,14 @@ class JWT
             $expireToken = false;
             foreach ($tokenList as $key => $val) {
                 if ($tokenType == self::REFRESH && $val['refreshToken'] == $token) {
-                    if (bcadd($val['refreshTime'], $val['refreshExp'], 0) < time()) {
+                    if (($val['refreshTime'] + $val['refreshExp']) < time()) {
                         unset($tokenList[$key]);
                     } else {
                         $checkToken = true;
                     }
                 }
                 if ($tokenType == self::ACCESS && $val['accessToken'] == $token) {
-                    if (bcadd($val['accessTime'], $val['accessExp'], 0) < time()) {
+                    if (($val['accessTime'] + $val['accessExp']) < time()) {
                         $expireToken = true;
                     } else {
                         $checkToken = true;
