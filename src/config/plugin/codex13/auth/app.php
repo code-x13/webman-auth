@@ -21,14 +21,16 @@
          'algorithms' => 'HS256',
          // bcrypt cost，范围 4-31
          'bcrypt_cost' => env('AUTH_BCRYPT_COST', 10),
-         // access token 密钥（HS* 算法）
-         // ⚠️ 安全提示：生产环境必须使用 `php webman auth:key` 生成新密钥
-         'access_secret_key' => 'w5LgNx5luRRjmamZFSqz3cPHOp9KuQPExlvgi18DN4SdnSI9obcVEhiZVE0NIIC7',
+        // access token 密钥（HS* 算法）
+        // ⚠️ 强制要求：请在项目中执行 `php webman auth:key` 生成密钥
+        // 初始占位值会触发 JWT::validateConfig 抛异常，保证必须先生成密钥
+        'access_secret_key' => '',
          // access token 过期时间（秒）
          'access_exp' => 36000,
-         // refresh token 密钥（HS* 算法）
-         // ⚠️ 安全提示：生产环境必须使用 `php webman auth:key` 生成新密钥
-         'refresh_secret_key' => 'w5LgNx5luRRjmamZFSqz3cPHOp9KuQPExlvgi18DN4SdnSI9obcVEhiZVE0NIIC7',
+        // refresh token 密钥（HS* 算法）
+        // ⚠️ 强制要求：请在项目中执行 `php webman auth:key` 生成密钥
+        // 初始占位值会触发 JWT::validateConfig 抛异常，保证必须先生成密钥
+        'refresh_secret_key' => '',
          // refresh token 过期时间（秒）
          'refresh_exp' => 72000,
          // token 签发者

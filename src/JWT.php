@@ -28,6 +28,11 @@ class JWT
     const REFRESH = 2, ACCESS = 1;
 
     /**
+     * 对称密钥最小长度要求
+     */
+    protected const MIN_SECRET_LENGTH = 32;
+
+    /**
      * 当前 guard 名称
      */
     protected string $guard = 'user';
@@ -66,6 +71,9 @@ class JWT
         $this->config = $_config;
         $this->redis = $this->toBool($_config['redis'] ?? false);
         $this->config['redis'] = $this->redis;
+
+        // 安全优先：启动时强校验关键配置，防止默认弱密钥误上生产
+        $this->validateConfig();
     }
 
     /**
@@ -327,7 +335,7 @@ class JWT
         $token = $this->getTokenFormHeader();
         $tokenPayload = self::verifyToken($token, self::ACCESS);
         // Redis 开启时同步删除 Redis 侧会话
-        if (isset($this->config['redis']) && $this->config['redis']) {
+        if (isset($this->redis) && $this->redis) {
 
             // 获取主键字段
             $idKey = config("plugin.codex13.auth.app.guard.{$this->guard}.key");
@@ -337,7 +345,7 @@ class JWT
             } else {
                 $list = Redis::hGet(config('plugin.codex13.auth.app.cache_key') . "{$this->guard}", $id);
                 if ($list) {
-                    $tokenList = unserialize($list);
+                    $tokenList = unserialize($list, ['allowed_classes' => false]);
                     foreach ($tokenList as $key => $val) {
                         if ($val['accessToken'] == $token) {
                             unset($tokenList[$key]);
@@ -378,7 +386,7 @@ class JWT
             'accessTime' => time(),
         ];
         if ($list != null) {
-            $tokenList = unserialize($list);
+            $tokenList = unserialize($list, ['allowed_classes' => false]);
             $maxNum = config("plugin.codex13.auth.app.guard.{$this->guard}.num");
             if (is_array($tokenList)) {
                 if ($maxNum === -1) { // 不限制终端数量
@@ -440,7 +448,7 @@ class JWT
     {
         $list = Redis::hGet(config('plugin.codex13.auth.app.cache_key') . "{$this->guard}", $id);
         if ($list) {
-            $tokenList = unserialize($list);
+            $tokenList = unserialize($list, ['allowed_classes' => false]);
             $refresh = false;
             foreach ($tokenList as $key => $val) {
                 if (($val['refreshTime'] + $val['refreshExp']) < time()) {
@@ -468,7 +476,7 @@ class JWT
     {
         $list = Redis::hGet(config('plugin.codex13.auth.app.cache_key') . "{$this->guard}", $id);
         if ($list != null) {
-            $tokenList = unserialize($list);
+            $tokenList = unserialize($list, ['allowed_classes' => false]);
             $checkToken = false;
             $expireToken = false;
             foreach ($tokenList as $key => $val) {
@@ -519,5 +527,48 @@ class JWT
         $args[] = lcfirst($method);
 
         return call_user_func_array([$this, 'is'], $args);
+    }
+
+    /**
+     * 校验 JWT 关键配置安全性（安全优先，异常优先于运行）
+     */
+    protected function validateConfig(): void
+    {
+        $alg = $this->config['algorithms'] ?? 'HS256';
+
+        // 限制在支持的算法集合内
+        $supported = ['ES256', 'HS256', 'HS384', 'HS512', 'RS256', 'RS384', 'RS512'];
+        if (!in_array($alg, $supported, true)) {
+            throw new JwtTokenException("不支持的 JWT 签名算法配置：{$alg}");
+        }
+
+        // 对称算法：强校验密钥强度 & 避免使用演示默认值
+        if (str_starts_with($alg, 'HS')) {
+            $accessKey  = (string)($this->config['access_secret_key'] ?? '');
+            $refreshKey = (string)($this->config['refresh_secret_key'] ?? '');
+
+            if ($accessKey === '' || $refreshKey === '') {
+                throw new JwtTokenException('JWT 密钥未配置，请先执行 "php webman auth:key" 或在环境变量中配置安全密钥');
+            }
+
+            if (strlen($accessKey) < self::MIN_SECRET_LENGTH || strlen($refreshKey) < self::MIN_SECRET_LENGTH) {
+                throw new JwtTokenException('JWT 对称密钥长度过短，建议不少于 32 字节，请重新生成安全密钥');
+            }
+        }
+
+        // 非对称算法：至少保证配置了类似 PEM 的公私钥结构
+        if (str_starts_with($alg, 'RS') || str_starts_with($alg, 'ES')) {
+            $privAccess  = (string)($this->config['access_private_key'] ?? '');
+            $pubAccess   = (string)($this->config['access_public_key'] ?? '');
+            $privRefresh = (string)($this->config['refresh_private_key'] ?? '');
+            $pubRefresh  = (string)($this->config['refresh_public_key'] ?? '');
+
+            $keys = [$privAccess, $pubAccess, $privRefresh, $pubRefresh];
+            foreach ($keys as $key) {
+                if ($key === '' || !str_contains($key, 'BEGIN')) {
+                    throw new JwtTokenException('JWT 非对称加密密钥配置不完整，请检查 access/refresh 公私钥是否正确配置为 PEM 格式');
+                }
+            }
+        }
     }
 }

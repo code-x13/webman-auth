@@ -23,7 +23,7 @@ class AuthKeyCommand extends Command
     }
 
     /**
-     * 生成并写入 access/refresh 密钥
+     * 生成 access/refresh 密钥并写入配置文件 config/plugin/codex13/auth/app.php
      * @param InputInterface $input
      * @param OutputInterface $output
      * @return int
@@ -33,18 +33,28 @@ class AuthKeyCommand extends Command
     {
         $name = $input->getArgument('name');
         $output->writeln('Generate jwtKey Start');
-        $key = Str::random(64);
-        file_put_contents(base_path()."/config/plugin/codex13/auth/app.php", str_replace(
-            "'access_secret_key' => '".config('plugin.codex13.auth.app.jwt.access_secret_key')."'",
-            "'access_secret_key' => '".$key."'",
-            file_get_contents(base_path()."/config/plugin/codex13/auth/app.php")
-        ));
-        file_put_contents(base_path()."/config/plugin/codex13/auth/app.php", str_replace(
-            "'refresh_secret_key' => '".config('plugin.codex13.auth.app.jwt.refresh_secret_key')."'",
-            "'refresh_secret_key' => '".$key."'",
-            file_get_contents(base_path()."/config/plugin/codex13/auth/app.php")
-        ));
-        $output->writeln('Generate jwtKey End'.$key);
+        // 按你的选择：access / refresh 使用不同随机密钥
+        $accessKey  = Str::random(64);
+        $refreshKey = Str::random(64);
+
+        $configPath = base_path() . '/config/plugin/codex13/auth/app.php';
+        $content = file_get_contents($configPath);
+
+        // 替换 access_secret_key
+        $oldAccess = "'access_secret_key' => '" . config('plugin.codex13.auth.app.jwt.access_secret_key') . "'";
+        $newAccess = "'access_secret_key' => '" . $accessKey . "'";
+        $content = str_replace($oldAccess, $newAccess, $content);
+
+        // 替换 refresh_secret_key
+        $oldRefresh = "'refresh_secret_key' => '" . config('plugin.codex13.auth.app.jwt.refresh_secret_key') . "'";
+        $newRefresh = "'refresh_secret_key' => '" . $refreshKey . "'";
+        $content = str_replace($oldRefresh, $newRefresh, $content);
+
+        file_put_contents($configPath, $content);
+
+        $output->writeln('Generate jwtKey End');
+        $output->writeln('New access_secret_key and refresh_secret_key have been written to config/plugin/codex13/auth/app.php');
+
         return self::SUCCESS;
     }
 
